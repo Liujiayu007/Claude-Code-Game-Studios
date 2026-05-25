@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script="res://src/config/area_config.gd" load_steps=1 format=3]
+
+[resource]
+area_id = "default"
+area_name = "Default Area"
+enemy_pool = []
+boss_id = ""
+bgm_id = ""
