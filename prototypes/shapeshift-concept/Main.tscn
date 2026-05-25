@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3 uid="uid://a1b2c3d4e5f6g"]
+
+[ext_resource type="Script" path="res://Main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://b4w3v2j1k8n9m" path="res://Player.tscn" id="2_player"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(640, 360)
+enabled = true
+
+[node name="TileMap" type="Node2D" parent="."]
+
+[node name="Background" type="ColorRect" parent="."]
+offset_left = -1000.0
+offset_top = -1000.0
+offset_right = 1000.0
+offset_bottom = 1000.0
+color = Color(0.1, 0.1, 0.15, 1)
