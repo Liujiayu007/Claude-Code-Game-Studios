@@ -30,7 +30,7 @@
 #   Superseded entries:     Grep pattern="status: superseded"
 
 version: 1
-last_updated: ""
+last_updated: "2026-05-25"
 
 # ─── STATE OWNERSHIP ─────────────────────────────────────────────────────────
 # Who is the authoritative owner of each piece of shared game state.
@@ -43,7 +43,96 @@ last_updated: ""
 # interface: how other systems access this state (read-only property, method call,
 #   signal, shared resource, etc.) — this is the contract other ADRs depend on.
 
-state_ownership: []
+state_ownership:
+  - state: current_game_state
+    status: active
+    owner_system: GSM
+    adr: docs/architecture/adr-0007-gsm-state-machine.md
+    interface: "GSM.current_state (read-only State enum). GSM.state_changed(old, new) signal on transition. GSM.request_transition(target) — sole write path."
+    write_access: gsm-only
+    referenced_by:
+      - docs/architecture/adr-0007-gsm-state-machine.md
+      - docs/architecture/adr-0006-input-system.md
+      - docs/architecture/adr-0003-object-pooling.md
+    added: 2026-05-24
+    revised: ""
+
+  - state: meter_current
+    status: active
+    owner_system: absorption-system
+    adr: docs/architecture/adr-0008-absorption-system.md
+    interface: "AbsorptionSystem.meter_current (read-only float, range 0.0–1.0). Absorptionsystem.add_energy(amount) — sole fill path. Absorptionsystem.consume_all() — sole drain path. Signals: meter_changed, meter_full, meter_threshold_crossed."
+    write_access: absorption-system-only
+    referenced_by:
+      - docs/architecture/adr-0008-absorption-system.md
+      - docs/architecture/adr-0003-object-pooling.md
+      - docs/architecture/adr-0007-gsm-state-machine.md
+    added: 2026-05-24
+    revised: ""
+
+  - state: transformation_state
+    status: active
+    owner_system: transformation-system
+    adr: docs/architecture/adr-0009-transformation-system.md
+    interface: "TransformationSystem.active_form_id (read-only String), is_berserk (read-only bool), cooldown_remaining (read-only float), duration_remaining (read-only float). Signals: transformation_started, transformation_expired, berserk_activated, berserk_expired, cooldown_complete, transformation_failed. Sole write: request_transformation(form_id)."
+    write_access: transformation-system-only
+    referenced_by:
+      - docs/architecture/adr-0009-transformation-system.md
+      - docs/architecture/adr-0007-gsm-state-machine.md
+      - docs/architecture/adr-0008-absorption-system.md
+    added: 2026-05-24
+    revised: ""
+
+  - state: player_state
+    status: active
+    owner_system: player-system
+    adr: docs/architecture/adr-0012-player-system.md
+    interface: "PlayerSystem.hp_current (read-only float), PlayerSystem.hp_max (read-only float), PlayerSystem.global_position (read-only Vector2). Signals: player_hit(damage), damage_dealt(target, amount), player_died(), hp_changed(new_hp). Sole write: PlayerController.take_damage() via enemy collision."
+    write_access: player-system-only
+    referenced_by:
+      - docs/architecture/adr-0012-player-system.md
+      - docs/architecture/adr-0010-enemy-system.md
+      - docs/architecture/adr-0008-absorption-system.md
+      - docs/architecture/adr-0009-transformation-system.md
+    added: 2026-05-24
+    revised: ""
+
+  - state: wave_progression
+    status: active
+    owner_system: wave-system
+    adr: docs/architecture/adr-0011-wave-system.md
+    interface: "WaveSystem.current_wave (read-only int), total_waves (read-only int). WaveSystem.start_wave_sequence(). Signals: wave_started, wave_cleared, boss_wave_started, all_waves_cleared, intermission_started, intermission_ended."
+    write_access: wave-system-only
+    referenced_by:
+      - docs/architecture/adr-0011-wave-system.md
+      - docs/architecture/adr-0010-enemy-system.md
+    added: 2026-05-24
+    revised: ""
+
+  - state: enemy_pools
+    status: active
+    owner_system: enemy-system
+    adr: docs/architecture/adr-0010-enemy-system.md
+    interface: "EnemySystem.spawn_enemy(type, position) -> EnemyController. EnemySystem.despawn_all(). EnemySystem.get_active_count() -> int. Signals: enemy_spawned, enemy_defeated(position, type, energy_value), all_enemies_despawned."
+    write_access: enemy-system-only
+    referenced_by:
+      - docs/architecture/adr-0010-enemy-system.md
+      - docs/architecture/adr-0003-object-pooling.md
+      - docs/architecture/adr-0008-absorption-system.md
+    added: 2026-05-24
+    revised: ""
+
+  - state: area_identity
+    status: active
+    owner_system: area-system
+    adr: docs/architecture/adr-0013-area-system.md
+    interface: "AreaSystem.current_area_id (read-only String), AreaSystem.current_area_config (read-only AreaConfig), AreaSystem.total_areas (read-only int). AreaSystem.get_enemy_pool_for_wave(wave) -> Array[EnemyPoolEntry]. Signals: area_changing, area_changed, area_load_failed, all_areas_cleared. Sole write: _activate_area()."
+    write_access: area-system-only
+    referenced_by:
+      - docs/architecture/adr-0013-area-system.md
+      - docs/architecture/adr-0011-wave-system.md
+    added: 2026-05-24
+    revised: ""
 
 # Example:
 #
@@ -71,7 +160,101 @@ state_ownership: []
 #
 # pattern options: signal | direct_call | event_bus | shared_resource | rpc | none
 
-interfaces: []
+interfaces:
+  - contract: autoload_init_order
+    status: active
+    pattern: direct_call
+    producer: project.godot [autoload]
+    consumers:
+      - all 12 MVP systems
+    adr: docs/architecture/adr-0001-autoload-architecture.md
+    signal_signature: "Godot loads Autoloads in project-settings order. Foundation → Core → Presentation. Later systems may assume earlier ones are _ready()."
+    referenced_by:
+      - docs/architecture/adr-0001-autoload-architecture.md
+    added: 2026-05-24
+    revised: ""
+
+  - contract: cross_system_communication
+    status: active
+    pattern: signal
+    producer: all 12 MVP systems
+    consumers:
+      - all 12 MVP systems
+    adr: docs/architecture/adr-0001-autoload-architecture.md
+    signal_signature: "信号 (for events) + 只读属性 getter (for queries). Direct property writes forbidden. Signal naming: snake_case past tense. Payload: positional (1-3 params) or typed Dictionary (4+). Connect in _ready() only. No anonymous callbacks."
+    referenced_by:
+      - docs/architecture/adr-0001-autoload-architecture.md
+      - docs/architecture/adr-0004-signal-bus-pattern.md
+    added: 2026-05-24
+    revised: 2026-05-24
+
+  - contract: canvaslayer_z_order
+    status: active
+    pattern: direct_call
+    producer: HUD + VFX (each owns specific CanvasLayers)
+    consumers:
+      - HUD system
+      - VFX system
+    adr: docs/architecture/adr-0002-canvaslayer-architecture.md
+    signal_signature: "Layer Z: 0=GameWorld, 1=VFX_World, 2=VFX_Screen, 3=HUD_Core, 4=HUD_Overlay, 5=VFX_Overlay. Layer constants shared via DataConfig."
+    referenced_by:
+      - docs/architecture/adr-0002-canvaslayer-architecture.md
+    added: 2026-05-24
+    revised: ""
+
+  - contract: data_config_access
+    status: active
+    pattern: direct_call
+    producer: DataConfig (Autoload #1)
+    consumers:
+      - all 11 other MVP systems
+    adr: docs/architecture/adr-0005-data-configuration.md
+    signal_signature: "Direct @export var property read. Scalar values: DataConfig.vfx_pool_attack. Structured data: DataConfig.get_form_config(id). No signals — DataConfig is a passive data store."
+    referenced_by:
+      - docs/architecture/adr-0005-data-configuration.md
+    added: 2026-05-24
+    revised: ""
+
+  - contract: input_system_interface
+    status: active
+    pattern: direct_call
+    producer: InputSystem (Autoload #3)
+    consumers:
+      - PlayerSystem (movement + combat input)
+      - HUD (menu navigation + device prompt)
+      - GSM (input blocking per state)
+    adr: docs/architecture/adr-0006-input-system.md
+    signal_signature: "Continuous input: systems use Input.get_vector() directly. Discrete actions: InputSystem.is_action_buffered(action). Device: InputSystem.current_device + device_changed(Device) signal. Blocking: GSM calls InputSystem.set_blocked_actions(state)."
+    referenced_by:
+      - docs/architecture/adr-0006-input-system.md
+    added: 2026-05-24
+    revised: ""
+
+  - contract: state_transition
+    status: active
+    pattern: signal
+    producer: GSM (Autoload #2)
+    consumers:
+      - all 11 other MVP systems
+    adr: docs/architecture/adr-0007-gsm-state-machine.md
+    signal_signature: "state_changed(old_state: GSM.State, new_state: GSM.State). GSM.request_transition(target: GSM.State) -> bool. GSM.current_state (read-only). Transition matrix validates before signal emits."
+    referenced_by:
+      - docs/architecture/adr-0007-gsm-state-machine.md
+    added: 2026-05-24
+    revised: ""
+
+  - contract: audio_playback
+    status: active
+    pattern: signal
+    producer: upstream gameplay systems (PlayerSystem, TransformationSystem, WaveSystem, AbsorptionSystem, GSM)
+    consumers:
+      - AudioSystem (Autoload #12)
+    adr: docs/architecture/adr-0016-audio-system.md
+    signal_signature: "All audio dispatched from signal handlers. AudioSystem subscribes to GSM.state_changed, PlayerSystem.player_hit/damage_dealt/player_died, TransformationSystem.transformation_started/expired, WaveSystem.wave_started/cleared, AbsorptionSystem.meter_full/meter_changed. No system calls AudioSystem._play_sfx() directly. Parallel consumer with VFXSystem (ADR-0015) — same signals drive both."
+    referenced_by:
+      - docs/architecture/adr-0016-audio-system.md
+    added: 2026-05-25
+    revised: ""
 
 # Example:
 #
@@ -100,7 +283,36 @@ interfaces: []
 # Register a budget when an ADR explicitly claims a frame time allocation.
 # The registry lets /architecture-review verify the total doesn't exceed the target.
 
-performance_budgets: []
+performance_budgets:
+  - system: vfx_pooling
+    status: active
+    budget_ms: 0.05
+    adr: docs/architecture/adr-0003-object-pooling.md
+    notes: "Pool acquire/release O(n) scan across 270 CpuParticles2D nodes. Worst case burst pool (80) scan cost at 60fps."
+    referenced_by:
+      - docs/architecture/adr-0003-object-pooling.md
+    added: 2026-05-24
+    revised: ""
+
+  - system: audio_pooling
+    status: active
+    budget_ms: 0.02
+    adr: docs/architecture/adr-0003-object-pooling.md
+    notes: "12 AudioStreamPlayer nodes across 2 pools. Priority preemption O(n) scan. Negligible per-frame cost."
+    referenced_by:
+      - docs/architecture/adr-0003-object-pooling.md
+    added: 2026-05-24
+    revised: ""
+
+  - system: audio_system
+    status: active
+    budget_ms: 0.02
+    adr: docs/architecture/adr-0016-audio-system.md
+    notes: "SFX playback O(1) + priority preemption O(n) over 8 channels (< 0.001ms). BGM crossfade via Tween (zero per-frame CPU). Charging pitch move_toward() + linear_to_db() (< 0.01ms). Heartbeat timer check (< 0.001ms). Only active during COMBAT/TRANSFORMATION states."
+    referenced_by:
+      - docs/architecture/adr-0016-audio-system.md
+    added: 2026-05-25
+    revised: ""
 
 # Example:
 #
@@ -131,7 +343,50 @@ performance_budgets: []
 # Register an API decision when the choice is non-obvious and other ADRs might
 # make a different choice for the same purpose without knowing this was decided.
 
-api_decisions: []
+api_decisions:
+  - purpose: rendering_layer_management
+    status: active
+    api: CanvasLayer.layer (integer Z-index)
+    not: node tree order for cross-system Z-ordering
+    adr: docs/architecture/adr-0002-canvaslayer-architecture.md
+    reason: "CanvasLayer.layer provides explicit Z-ordering independent of scene tree structure. Necessary because HUD and VFX are separate Autoloads with separate scene trees."
+    referenced_by:
+      - docs/architecture/adr-0002-canvaslayer-architecture.md
+    added: 2026-05-24
+    revised: ""
+
+  - purpose: object_pooling
+    status: active
+    api: pre-allocation in _ready() with acquire()/release()/get_active_count() interface
+    not: runtime new() or queue_free() for pooled node types
+    adr: docs/architecture/adr-0003-object-pooling.md
+    reason: "Zero runtime allocation avoids GC stutter. Fixed pool sizes provide predictable memory footprint (270 CpuParticles2D + 12 AudioStreamPlayer ≈ 55 KB)."
+    referenced_by:
+      - docs/architecture/adr-0003-object-pooling.md
+    added: 2026-05-24
+    revised: ""
+
+  - purpose: config_data_format
+    status: active
+    api: "@export var on DataConfig.gd (scalars/arrays) + Custom Resource .tres files (structured multi-field data)"
+    not: JSON files, CSV files, or hardcoded const in system scripts
+    adr: docs/architecture/adr-0005-data-configuration.md
+    reason: "@export var provides editor-inspectable, type-safe, zero-loading-overhead config. Custom Resources provide typed multi-field data with autocomplete. JSON loses type safety; hardcoded consts scatter configuration."
+    referenced_by:
+      - docs/architecture/adr-0005-data-configuration.md
+    added: 2026-05-24
+    revised: ""
+
+  - purpose: input_map_configuration
+    status: active
+    api: InputMap.add_action() + InputMap.action_add_event() in _ready() (code-based)
+    not: Project Settings → Input Map editor (manual, opaque to version control)
+    adr: docs/architecture/adr-0006-input-system.md
+    reason: "Code-based Input Map configuration is version-controllable, diffable, and keeps all input definitions in one file. Visual editor is convenient but opaque to git."
+    referenced_by:
+      - docs/architecture/adr-0006-input-system.md
+    added: 2026-05-24
+    revised: ""
 
 # Example:
 #
@@ -157,7 +412,132 @@ api_decisions: []
 # Register a pattern when an ADR explicitly bans it AND other ADRs might
 # unknowingly use it (i.e., it's a tempting but wrong approach for this project).
 
-forbidden_patterns: []
+forbidden_patterns:
+  - pattern: direct_cross_system_state_write
+    status: active
+    description: "A system must never directly assign to another Autoload's properties. Use signals or request_*() methods on the owner instead."
+    why: "Direct state writes create race conditions and break the signal-driven architecture. The owning system must be the sole writer of its internal state."
+    adr: docs/architecture/adr-0001-autoload-architecture.md
+    added: 2026-05-24
+
+  - pattern: forward_autoload_reference
+    status: active
+    description: "An Autoload registered earlier in project.godot must not reference Autoloads registered later. Earlier systems cannot assume later systems have been _ready()."
+    why: "Godot loads Autoloads in order. A Foundation system referencing a Presentation system in _ready() will receive null — causing silent crashes."
+    adr: docs/architecture/adr-0001-autoload-architecture.md
+    added: 2026-05-24
+
+  - pattern: runtime_node_creation_during_gameplay
+    status: active
+    description: "Pooled nodes (CpuParticles2D, AudioStreamPlayer) must never be created via new() or destroyed via queue_free() during gameplay. All nodes pre-allocated in _ready()."
+    why: "Runtime node creation triggers scene tree updates and GC — causes frame spikes at 60fps with up to 150 simultaneous particles."
+    adr: docs/architecture/adr-0003-object-pooling.md
+    added: 2026-05-24
+
+  - pattern: cross_system_pool_sharing
+    status: active
+    description: "Pool managers are internal to their owning system. VFX owns particle pools; Audio owns SFX pools. No system may borrow nodes from another system's pool."
+    why: "Each system has different node types (CpuParticles2D vs AudioStreamPlayer) and different exhaustion strategies (recycle-oldest vs priority-preemption). Cross-system sharing would couple independent systems."
+    adr: docs/architecture/adr-0003-object-pooling.md
+    added: 2026-05-24
+
+  - pattern: anonymous_signal_callbacks
+    status: active
+    description: "All signal connect() calls must reference named methods, never lambdas or inline anonymous functions."
+    why: "Named callbacks are grep-able, stack-trace readable, and auditable. Lambda callbacks in connect() hide the signal graph from code search and make debugging harder."
+    adr: docs/architecture/adr-0004-signal-bus-pattern.md
+    added: 2026-05-24
+
+  - pattern: runtime_signal_connect_disconnect
+    status: active
+    description: "Signals must be connected in _ready() and never disconnected/reconnected at runtime. Pooled objects use boolean guards instead of connect/disconnect."
+    why: "Runtime connect/disconnect creates an invisible, changing signal graph that cannot be audited statically. This is a common source of 'signal silently not firing' bugs."
+    adr: docs/architecture/adr-0004-signal-bus-pattern.md
+    added: 2026-05-24
+
+  - pattern: hardcoded_tunable_value
+    status: active
+    description: "No system may hardcode a numeric or string value that has a corresponding entry in a GDD 'Tuning Knobs' section. All tunable values must live in DataConfig.gd as @export var or in a .tres Custom Resource."
+    why: "Hardcoded values scatter configuration across 12 files, making balancing a multi-file hunt and risking silent divergence when the same value is defined in two places."
+    adr: docs/architecture/adr-0005-data-configuration.md
+    added: 2026-05-24
+
+  - pattern: direct_config_file_loading
+    status: active
+    description: "Only DataConfig may load configuration files from disk. No other system may call load() or ResourceLoader.load() on a .tres or data file."
+    why: "DataConfig is the single source of truth (GDD data-config.md Rule 1). If other systems load config independently, they bypass DataConfig and create shadow configuration states."
+    adr: docs/architecture/adr-0005-data-configuration.md
+    added: 2026-05-24
+
+  - pattern: per_system_input_config
+    status: active
+    description: "Systems must not define their own Input Map actions independently. All Input Map configuration happens in InputSystem._ready() via InputMap.add_action(). Systems call Input or InputSystem for input — never configure InputMap themselves."
+    why: "Input Map scattered across multiple files makes keybinding audits impossible and risks action name collisions between systems."
+    adr: docs/architecture/adr-0006-input-system.md
+    added: 2026-05-24
+
+  - pattern: reentrant_state_transition
+    status: active
+    description: "Signal handlers connected to GSM.state_changed must never call GSM.request_transition(). State transitions from within state change handlers create nested transitions and unpredictable state chains."
+    why: "Re-entrant transitions bypass the transition matrix (inner transition validates against an intermediate state, not the original). The _transition_in_progress flag rejects these, but handlers should not attempt them."
+    adr: docs/architecture/adr-0007-gsm-state-machine.md
+    added: 2026-05-24
+
+  - pattern: bypass_transformation_gate
+    status: active
+    description: "No system may set active_form_id, is_berserk, or any transformation timer directly. The 5-gate activation check in TransformationSystem.request_transformation() is the sole entry point for transformation state changes."
+    why: "Bypassing the activation gates (meter check, cooldown check, state check) would allow transformation in invalid states — e.g., transforming during DEATH or with empty meter."
+    adr: docs/architecture/adr-0009-transformation-system.md
+    added: 2026-05-24
+
+  - pattern: enemy_creation_outside_system
+    status: active
+    description: "Only EnemySystem may instantiate or despawn enemies. No other system may call enemy_scene.instantiate() or enemy.queue_free(). Enemy creation flows through EnemySystem.spawn_enemy() exclusively."
+    why: "Enemy lifecycle (pool, active list, state gating) is centralized in EnemySystem. Bypassing it creates unmanaged enemies that won't respond to state changes or be counted in get_active_count()."
+    adr: docs/architecture/adr-0010-enemy-system.md
+    added: 2026-05-24
+
+  - pattern: wave_spawn_outside_system
+    status: active
+    description: "Only WaveSystem may trigger wave progression and enemy spawn waves. No other system may call start_wave_sequence() or directly trigger wave state changes."
+    why: "Wave pacing (spawn timing, intermission, boss waves) is centralized in WaveSystem. Bypassing it creates unmanaged spawn waves that don't respect wave progression or trigger wave_cleared/all_waves_cleared correctly."
+    adr: docs/architecture/adr-0011-wave-system.md
+    added: 2026-05-24
+
+  - pattern: player_creation_outside_system
+    status: active
+    description: "Only PlayerSystem may instantiate the Player scene. No other system may call load('player.tscn').instantiate() or player.queue_free(). Player lifecycle flows through PlayerSystem._spawn_player() exclusively."
+    why: "Player lifecycle (scene instantiation, spawn position, stat initialization, signal wiring) is centralized in PlayerSystem. Bypassing it creates an unmanaged player node that other systems cannot reference via PlayerSystem.player."
+    adr: docs/architecture/adr-0012-player-system.md
+    added: 2026-05-24
+
+  - pattern: area_config_runtime_mutation
+    status: active
+    description: "No system may mutate AreaConfig properties at runtime. All area parameters (enemy_pool, background_key, bgm_track, etc.) are read-only after loading. Area transitions switch the current_area_config reference — not the data within a config."
+    why: "AreaConfig is shared state read by 4+ systems. If one system mutates enemy_pool mid-wave, other systems see inconsistent area data. All area parameter changes must happen via DataConfig .tres edits + game restart."
+    adr: docs/architecture/adr-0013-area-system.md
+    added: 2026-05-24
+
+  - pattern: per_system_ui_elements
+    status: active
+    description: "Systems must not create their own UI elements (Control nodes, Labels, TextureProgressBars). All UI elements live under HUDSystem's CanvasLayers (3=HUD_Core, 4=HUD_Overlay). No other system may own or create UI nodes."
+    why: "Distributed UI creation scatters Z-ordering control across systems, risks CanvasLayer conflicts, and duplicates fade/Tween/animation logic. Centralizing UI under HUDSystem ensures consistent Z-ordering, unified animation feel, and a single visibility table."
+    adr: docs/architecture/adr-0014-hud-ui-system.md
+    added: 2026-05-24
+
+  - pattern: vfx_creation_outside_system
+    status: active
+    description: "Only VFXSystem may manage CpuParticles2D particles, screen flash, and VFX CanvasLayer nodes. No other system may create particles, modulate CanvasLayer for visual effects, or spawn VFX nodes."
+    why: "VFX pooling (270 CpuParticles2D across 6 pools), priority resolution, and CanvasLayer Z-ordering are centralized in VFXSystem. Bypassing it creates unmanaged particles that don't respect pool limits, priority tiers, or intensity settings."
+    adr: docs/architecture/adr-0015-vfx-system.md
+    added: 2026-05-24
+
+  - pattern: audio_creation_outside_system
+    status: active
+    description: "Only AudioSystem may manage AudioStreamPlayer nodes, audio bus routing, and audio playback. No other system may call AudioStreamPlayer.play(), create AudioStreamPlayer nodes, or modify AudioServer bus volumes."
+    why: "Audio pooling (12 AudioStreamPlayer across 2 pools), priority preemption (5 tiers), BGM 4-layer crossfade, and bus routing are centralized in AudioSystem. Bypassing it creates unmanaged audio players that don't respect pool limits, priority tiers, or bus volume controls."
+    adr: docs/architecture/adr-0016-audio-system.md
+    added: 2026-05-25
 
 # Example:
 #
