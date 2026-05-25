@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Shapeshift Survivor — 氛围与情绪 Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; font-family: 'Courier New', monospace; }
+  canvas { display: block; border: 1px solid #1a1a2e; image-rendering: pixelated; }
+  #hud { display: flex; gap: 40px; margin-top: 12px; color: #aaa; font-size: 12px; align-items: center; }
+  #hud .state-label { color: #FFD700; font-weight: bold; min-width: 100px; }
+  #hud .mood { color: #ff8c6b; }
+  #hud .key { color: #666; background: #111; padding: 2px 6px; border: 1px solid #333; }
+  #legend { margin-top: 8px; color: #555; font-size: 11px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="960" height="540"></canvas>
+<div id="hud">
+  <span>状态: <span class="state-label" id="state-label">探索</span></span>
+  <span>情绪: <span class="mood" id="mood-label">警觉</span></span>
+  <span>能量: <span id="energy-val" style="color:#5b8cbf">0</span>/100</span>
+  <span class="key">WASD</span> <span class="key">空格</span>
+  <span id="debug-info" style="color:#555;font-size:10px"></span>
+</div>
+<div id="legend">探索(青灰低对比) → 蓄能(暖色攀升) → 变身(闪光撕裂) → 碾压(高饱和残影) → 冷却(褪色闪烁) → 循环</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const W = 960, H = 540;
+canvas.width = W; canvas.height = H;
+
+// ===== GAME STATE MACHINE =====
+const STATE = {
+  EXPLORE: 'explore',      // 探索/平静 — 警觉, 冷调青灰, 低对比
+  BUILDUP: 'buildup',       // 战斗蓄能 — 贪婪, 暖调递增
+  TRANSFORM: 'transform',   // 变身瞬间 — 狂喜, 闪光撕裂
+  RAMPAGE: 'rampage',       // 变身战斗 — 碾压, 高饱和残影
+  COOLDOWN: 'cooldown'      // 冷却恢复 — 脆弱, 褪色闪烁
+};
+
+let gameState = STATE.EXPLORE;
+let stateTimer = 0;
+let transformFlashTimer = 0;  // 变身闪光的帧计时器
+
+// ===== PLAYER =====
+let player = { x: W/2, y: H/2, r: 12, vx: 0, vy: 0, speed: 2.5 };
+let enemies = [];
+let particles = [];
+let energyOrbs = [];
+let energy = 0;
+let transformed = false;
+let transformTimer = 0;
+let cooldownTimer = 0;
+const TRANSFORM_DURATION = 600;
+const TRANSFORM_COOLDOWN = 900;
+let attackTrails = [];  // 变身战斗残影
+let screenFlash = 0;     // 屏幕闪光强度
+
+// ===== PALETTES PER STATE =====
+// 探索: 60%青灰, 冷调
+const EXPLORE_BG = '#111118';
+const EXPLORE_GRID = '#181825';
+// 蓄能: 暖色从20%升至60%
+// 变身: 全屏形态色
+// 碾压: 70%形态色
+// 冷却: 先褪色再变暗
+
+const HUMAN_COLOR = '#4a7cb5';
+const MONSTER_COLOR = '#d94a2a';
+const MONSTER_GLOW = '#f06040';
+const ENEMY_COLORS = ['#6b5544','#5a4538','#7a5d48','#4d3a2c','#8b6b50'];
+const ENEMY_HIT = '#c4a882';
+
+// ===== INPUT =====
+const keys = {};
+window.onkeydown = e => { keys[e.key.toLowerCase()] = true; e.preventDefault(); };
+window.onkeyup = e => { keys[e.key.toLowerCase()] = false; e.preventDefault(); };
+
+// ===== HELPERS =====
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+// ===== SPAWN =====
+function spawnEnemy() {
+  if (enemies.length > 20) return;
+  let x, y;
+  const side = Math.floor(Math.random() * 4);
+  const margin = 40;
+  switch(side) {
+    case 0: x = rand(margin, W-margin); y = -margin; break;
+    case 1: x = W + margin; y = rand(margin, H-margin); break;
+    case 2: x = rand(margin, W-margin); y = H + margin; break;
+    case 3: x = -margin; y = rand(margin, H-margin); break;
+  }
+  enemies.push({ x, y, r: 10, hp: 3, maxHp: 3, color: ENEMY_COLORS[Math.floor(Math.random()*5)], hitFlash: 0 });
+}
+let spawnTick = 0;
+let spawnInterval = 90; // frames between spawns
+
+function spawnParticles(x, y, count, color, speed, life, squareOnly) {
+  for (let i = 0; i < count; i++) {
+    const angle = rand(0, Math.PI * 2);
+    const spd = speed * rand(0.4, 1.0);
+    particles.push({
+      x, y, vx: Math.cos(angle)*spd, vy: Math.sin(angle)*spd,
+      life: life * rand(0.4, 1), maxLife: life,
+      color, size: 1 + Math.floor(Math.random() * 3),
+      square: squareOnly !== false
+    });
+  }
+}
+
+function spawnEnergyOrb(x, y) {
+  energyOrbs.push({ x, y, life: 360, r: 5 });
+}
+
+function spawnAttackTrail(x, y, angle, formColor, motif) {
+  attackTrails.push({
+    x, y, angle, color: formColor, motif: motif || 'line',
+    life: 12, maxLife: 12, size: 4 + rand(0, 6)
+  });
+}
+
+// ===== UPDATE =====
+function update() {
+  // --- Player movement ---
+  player.vx = 0; player.vy = 0;
+  if (keys['w']) player.vy = -1;
+  if (keys['s']) player.vy = 1;
+  if (keys['a']) player.vx = -1;
+  if (keys['d']) player.vx = 1;
+  if (player.vx && player.vy) { player.vx *= 0.707; player.vy *= 0.707; }
+  player.x += player.vx * player.speed;
+  player.y += player.vy * player.speed;
+  player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+  player.y = Math.max(player.r, Math.min(H - player.r, player.y));
+
+  // --- Movement dust (探索状态可见) ---
+  if ((player.vx || player.vy) && gameState === STATE.EXPLORE) {
+    if (Math.random() < 0.3) {
+      spawnParticles(player.x, player.y + player.r, 1, 'rgba(150,160,180,0.4)', 0.5, 20, true);
+    }
+  }
+
+  // --- Transform trigger ---
+  if ((keys[' '] || keys['space']) && energy >= 100 && !transformed && cooldownTimer <= 0) {
+    transformed = true;
+    transformTimer = TRANSFORM_DURATION;
+    energy = 0;
+    gameState = STATE.TRANSFORM;
+    stateTimer = 30; // 0.5s at 60fps
+    transformFlashTimer = 15;
+    screenFlash = 1.0;
+    spawnParticles(player.x, player.y, 40, MONSTER_GLOW, 6, 30, true);
+    // Clear trails on transform
+    attackTrails = [];
+  }
+
+  // --- Transform flash sequence ---
+  if (transformFlashTimer > 0) {
+    transformFlashTimer--;
+    if (transformFlashTimer === 0) {
+      screenFlash = 0;
+      gameState = STATE.RAMPAGE;
+    }
+  }
+
+  // --- Transform duration ---
+  if (transformed) {
+    transformTimer--;
+    if (transformTimer <= 0) {
+      transformed = false;
+      cooldownTimer = TRANSFORM_COOLDOWN;
+      gameState = STATE.COOLDOWN;
+      spawnParticles(player.x, player.y, 15, HUMAN_COLOR, 3, 25, true);
+    }
+  }
+
+  // --- Cooldown ---
+  if (cooldownTimer > 0) {
+    cooldownTimer--;
+    if (cooldownTimer <= 0 && gameState === STATE.COOLDOWN) {
+      gameState = STATE.EXPLORE;
+    }
+  }
+
+  // --- State detection for non-transition states ---
+  if (gameState !== STATE.TRANSFORM && gameState !== STATE.RAMPAGE && gameState !== STATE.COOLDOWN) {
+    if (enemies.length > 2) {
+      gameState = STATE.BUILDUP;
+    } else {
+      gameState = STATE.EXPLORE;
+    }
+  }
+
+  // --- Auto-attack ---
+  const attackRange = transformed ? 200 : 100;
+  const attackDmg = transformed ? 2 : 1;
+  const attackColor = transformed ? MONSTER_GLOW : '#7aaddd';
+
+  for (let enemy of enemies) {
+    if (dist(player, enemy) < attackRange) {
+      enemy.hp -= attackDmg;
+      enemy.hitFlash = 6;
+      const angle = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+
+      if (transformed) {
+        // Monster: arc motif trails
+        spawnAttackTrail(enemy.x, enemy.y, angle, attackColor, 'arc');
+        spawnParticles(enemy.x, enemy.y, 2, attackColor, 4, 12, true);
+      } else {
+        // Human: thin line
+        const sx = player.x + Math.cos(angle) * player.r;
+        const sy = player.y + Math.sin(angle) * player.r;
+        spawnParticles(sx, sy, 1, attackColor, 4, 8, true);
+      }
+      break;
+    }
+  }
+
+  // --- Enemy death ---
+  enemies = enemies.filter(e => {
+    if (e.hp <= 0) {
+      spawnParticles(e.x, e.y, 6, e.color, 2.5, 18, true);
+      spawnEnergyOrb(e.x, e.y);
+      return false;
+    }
+    return true;
+  });
+
+  // --- Energy orb pickup ---
+  energyOrbs = energyOrbs.filter(orb => {
+    orb.life--;
+    if (dist(player, orb) < player.r + orb.r + 6) {
+      energy = Math.min(100, energy + 10);
+      spawnParticles(orb.x, orb.y, 4, '#ffe0a0', 2, 10, true);
+      // Auto-switch to BUILDUP when collecting energy
+      if (gameState === STATE.EXPLORE) gameState = STATE.BUILDUP;
+      return false;
+    }
+    return orb.life > 0;
+  });
+
+  // --- Enemy AI ---
+  for (let e of enemies) {
+    const angle = Math.atan2(player.y - e.y, player.x - e.x);
+    e.x += Math.cos(angle) * 1.0;
+    e.y += Math.sin(angle) * 1.0;
+    e.hitFlash = Math.max(0, e.hitFlash - 1);
+  }
+
+  // --- Spawn ---
+  spawnTick++;
+  const targetInterval = transformed ? 40 : 90;
+  spawnInterval += (targetInterval - spawnInterval) * 0.05;
+  if (spawnTick > Math.floor(spawnInterval)) { spawnTick = 0; spawnEnemy(); }
+
+  // --- Particles ---
+  particles = particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life--; return p.life > 0; });
+
+  // --- Attack trails (rampage) ---
+  attackTrails = attackTrails.filter(t => { t.life--; return t.life > 0; });
+
+  // --- Screen flash decay ---
+  if (screenFlash > 0 && transformFlashTimer === 0) {
+    screenFlash *= 0.85;
+    if (screenFlash < 0.01) screenFlash = 0;
+  }
+
+  stateTimer++;
+}
+
+// ===== DRAW =====
+function drawBackground() {
+  // Dynamic background based on game state
+  let bgColor, gridColor;
+
+  switch(gameState) {
+    case STATE.EXPLORE:
+      // 冷调青灰, 低对比
+      bgColor = '#111118';
+      gridColor = '#181825';
+      break;
+    case STATE.BUILDUP:
+      // 暖调递增: blend cold→warm based on energy
+      const warmRatio = energy / 100;
+      const r1 = 0x11 + Math.floor(warmRatio * 0x10);
+      const g1 = 0x11 + Math.floor(warmRatio * 0x08);
+      const b1 = 0x18 - Math.floor(warmRatio * 0x08);
+      bgColor = `rgb(${r1},${g1},${b1})`;
+      const r2 = 0x18 + Math.floor(warmRatio * 0x10);
+      const g2 = 0x18 + Math.floor(warmRatio * 0x08);
+      const b2 = 0x25 - Math.floor(warmRatio * 0x10);
+      gridColor = `rgb(${r2},${g2},${b2})`;
+      break;
+    case STATE.TRANSFORM:
+      // 全屏形态色 (flash handled separately)
+      bgColor = '#1a0d08';
+      gridColor = '#2a1a10';
+      break;
+    case STATE.RAMPAGE:
+      // 高饱和形态色环境
+      bgColor = '#1a0a05';
+      gridColor = '#2a1208';
+      break;
+    case STATE.COOLDOWN:
+      // 先褪色再变暗
+      const cdRatio = cooldownTimer / TRANSFORM_COOLDOWN;
+      const gray = Math.floor(0x11 + (1-cdRatio) * 0x08);
+      bgColor = `rgb(${gray},${gray},${gray+4})`;
+      gridColor = `rgb(${gray+4},${gray+4},${gray+8})`;
+      break;
+  }
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid (pixel-art style, subtle)
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 32) {
+    ctx.beginPath(); ctx.moveTo(Math.floor(x)+0.5, 0); ctx.lineTo(Math.floor(x)+0.5, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 32) {
+    ctx.beginPath(); ctx.moveTo(0, Math.floor(y)+0.5); ctx.lineTo(W, Math.floor(y)+0.5); ctx.stroke();
+  }
+}
+
+function drawScreenFlash() {
+  if (screenFlash > 0) {
+    // Phase 1: white flash (0-0.15s)
+    // Phase 2: silhouette blackout (0.15-0.35s)
+    // Phase 3: form color fade (0.35-0.5s)
+    const flashPhase = transformFlashTimer > 0 ? (15 - transformFlashTimer) / 15 : 0;
+
+    let flashColor;
+    if (flashPhase < 0.3) {
+      flashColor = `rgba(255,255,255,${screenFlash * 0.9})`;
+    } else if (flashPhase < 0.5) {
+      flashColor = `rgba(0,0,0,${screenFlash})`;
+    } else {
+      flashColor = `rgba(217,74,42,${screenFlash * 0.5})`;
+    }
+
+    ctx.fillStyle = flashColor;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawPixelRect(x, y, w, h, color) {
+  // Draw a pixel-perfect rectangle (no anti-aliasing)
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+}
+
+function drawPixelCircle(cx, cy, r, color) {
+  // Rough filled circle for pixel aesthetic
+  ctx.fillStyle = color;
+  const ir = Math.floor(r);
+  for (let dy = -ir; dy <= ir; dy++) {
+    const dxMax = Math.floor(Math.sqrt(ir*ir - dy*dy));
+    if (isNaN(dxMax)) continue;
+    ctx.fillRect(Math.floor(cx - dxMax), Math.floor(cy + dy), dxMax*2 + 1, 1);
+  }
+}
+
+function drawPlayer() {
+  const size = transformed ? player.r * 1.5 : player.r;
+  const color = transformed ? MONSTER_COLOR : HUMAN_COLOR;
+  const glowColor = transformed ? MONSTER_GLOW : null;
+  const px = Math.floor(player.x);
+  const py = Math.floor(player.y);
+
+  // Cooldown edge flicker (vulnerability visual)
+  if (gameState === STATE.COOLDOWN && Math.floor(stateTimer / 12) % 2 === 0) {
+    // Draw warning border flicker
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px - size - 2, py - size - 2, (size+2)*2, (size+2)*2);
+  }
+
+  if (transformed) {
+    // Monster: wide triangular/angular shape
+    const s = size;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(px, py - s * 1.4);
+    ctx.lineTo(px + s * 1.2, py + s * 0.5);
+    ctx.lineTo(px + s * 0.6, py + s * 1.1);
+    ctx.lineTo(px - s * 0.6, py + s * 1.1);
+    ctx.lineTo(px - s * 1.2, py + s * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glow aura (16px radius residual)
+    if (glowColor) {
+      ctx.fillStyle = glowColor;
+      ctx.globalAlpha = 0.25;
+      ctx.beginPath();
+      ctx.arc(px, py, size + 6, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Spikes
+    ctx.fillStyle = color;
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI*0.7 + (Math.PI*0.4/4)*i;
+      const sx = px + Math.cos(a)*s*1.3;
+      const sy = py + Math.sin(a)*s*1.3;
+      ctx.fillRect(Math.floor(sx-2), Math.floor(sy-6), 4, 6);
+    }
+  } else {
+    // Human: narrow vertical pill
+    ctx.fillStyle = color;
+    const hw = Math.floor(size * 0.5);
+    ctx.fillRect(px - hw, py - size, hw*2, size*2);
+    // "Head"
+    const hr = Math.floor(size * 0.4);
+    drawPixelCircle(px, py - size - 3, hr, color);
+  }
+}
+
+function drawEnemies() {
+  for (let e of enemies) {
+    const ex = Math.floor(e.x);
+    const ey = Math.floor(e.y);
+    const col = e.hitFlash > 0 ? ENEMY_HIT : e.color;
+
+    // Small angular enemy (restricted palette - brown/grey only)
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey - e.r * 0.8);
+    ctx.lineTo(ex + e.r*0.7, ey + e.r*0.4);
+    ctx.lineTo(ex + e.r*0.3, ey + e.r*0.7);
+    ctx.lineTo(ex - e.r*0.3, ey + e.r*0.7);
+    ctx.lineTo(ex - e.r*0.7, ey + e.r*0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    // HP indicator - pixel dots below
+    if (e.hp < e.maxHp) {
+      for (let i = 0; i < e.maxHp; i++) {
+        ctx.fillStyle = i < e.hp ? '#555' : '#222';
+        ctx.fillRect(ex - 5 + i*4, ey + e.r + 3, 2, 2);
+      }
+    }
+  }
+}
+
+function drawEnergyOrbs() {
+  for (let orb of energyOrbs) {
+    const ox = Math.floor(orb.x);
+    const oy = Math.floor(orb.y);
+    const pulse = orb.r + Math.sin(orb.life * 0.08) * 2;
+    // Pixelated glow orb
+    ctx.fillStyle = '#ffe0a0';
+    ctx.globalAlpha = 0.7;
+    drawPixelCircle(ox, oy, pulse, '#ffe0a0');
+    ctx.globalAlpha = 1;
+    // Bright center
+    drawPixelCircle(ox, oy, pulse * 0.5, '#fff8e0');
+  }
+}
+
+function drawParticles() {
+  for (let p of particles) {
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    if (p.square) {
+      // Pixel particles: squares, not circles
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawAttackTrails() {
+  for (let t of attackTrails) {
+    const alpha = t.life / t.maxLife;
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.fillStyle = t.color;
+
+    if (t.motif === 'arc') {
+      // Arc motif: pixelated curve around impact point
+      for (let a = 0; a < Math.PI*2; a += 0.3) {
+        const tx = t.x + Math.cos(a) * t.size * (1 - alpha);
+        const ty = t.y + Math.sin(a) * t.size * (1 - alpha);
+        ctx.fillRect(Math.floor(tx), Math.floor(ty), 2, 2);
+      }
+    } else {
+      // Line motif
+      const tx = t.x + Math.cos(t.angle) * t.size * alpha;
+      const ty = t.y + Math.sin(t.angle) * t.size * alpha;
+      ctx.fillRect(Math.floor(tx-1), Math.floor(ty-1), 3, 3);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawUI() {
+  // === Pixel-art energy meter (with dithering!) ===
+  const barW = 200, barH = 10, barX = Math.floor(W/2 - barW/2), barY = H - 30;
+  const pxSize = 4; // each "pixel" in the meter is 4x4 real pixels
+
+  // Background
+  ctx.fillStyle = '#111';
+  ctx.fillRect(barX-2, barY-2, barW+4, barH+4);
+
+  // Border (pixel-perfect)
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX-2, barY-2, barW+4, barH+4);
+
+  // Fill with dithering pattern
+  const fillRatio = energy / 100;
+  const fillW = Math.floor(barW * fillRatio);
+  const fillColor = energy >= 100 ? MONSTER_COLOR : HUMAN_COLOR;
+
+  // Solid fill base
+  ctx.fillStyle = fillColor;
+  ctx.fillRect(barX, barY, fillW, barH);
+
+  // Dithering on the charging edge
+  const edge = barX + fillW;
+  const ditherW = 16;
+  for (let dx = 0; dx < ditherW; dx += pxSize) {
+    for (let dy = 0; dy < barH; dy += pxSize) {
+      if (edge + dx >= barX + barW) break;
+      // Checkerboard dither pattern
+      const ditherOn = ((edge + dx) / pxSize + dy / pxSize) % 2 === 0;
+      if (ditherOn) {
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(edge + dx, barY + dy, pxSize, pxSize);
+      }
+    }
+  }
+
+  // Full meter glow pulse
+  if (energy >= 100) {
+    const pulse = Math.sin(stateTimer * 0.15) * 0.4 + 0.6;
+    ctx.fillStyle = `rgba(240,96,64,${pulse})`;
+    ctx.fillRect(barX-2, barY-2, barW+4, barH+4);
+    ctx.fillStyle = MONSTER_COLOR;
+    ctx.fillRect(barX, barY, fillW, barH);
+  }
+
+  // Cooldown overlay
+  if (cooldownTimer > 0) {
+    const cdW = barW * (cooldownTimer / TRANSFORM_COOLDOWN);
+    ctx.fillStyle = 'rgba(80,80,90,0.7)';
+    ctx.fillRect(barX, barY, cdW, barH);
+  }
+
+  // Transform timer indicator
+  if (transformed) {
+    const tW = barW * (transformTimer / TRANSFORM_DURATION);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(barX, barY, tW, barH);
+  }
+
+  // Update HUD labels
+  const stateNames = {
+    explore: '探索', buildup: '蓄能', transform: '变身!', rampage: '碾压', cooldown: '冷却'
+  };
+  const moodNames = {
+    explore: '警觉', buildup: '贪婪', transform: '狂喜', rampage: '碾压', cooldown: '脆弱'
+  };
+  document.getElementById('state-label').textContent = stateNames[gameState] || gameState;
+  document.getElementById('mood-label').textContent = moodNames[gameState] || '';
+  document.getElementById('energy-val').textContent = Math.floor(energy);
+  document.getElementById('debug-info').textContent =
+    `flash:${transformFlashTimer} screenFlash:${screenFlash.toFixed(2)} enemies:${enemies.length}`;
+}
+
+function drawStateOverlay() {
+  // Cooldown: desaturation effect (simulated by grey overlay)
+  if (gameState === STATE.COOLDOWN) {
+    const ratio = cooldownTimer / TRANSFORM_COOLDOWN;
+    const alpha = (1 - ratio) * 0.25; // max 25% grey overlay
+    ctx.fillStyle = `rgba(80,80,90,${alpha})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Death-like edge vignette during cooldown
+  if (gameState === STATE.COOLDOWN && cooldownTimer < 300) {
+    // edge darkening when close to recovery
+    const edgeAlpha = (1 - cooldownTimer/300) * 0.3;
+    const gradient = ctx.createRadialGradient(W/2, H/2, 150, W/2, H/2, 600);
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(1, `rgba(0,0,0,${edgeAlpha})`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ===== MAIN LOOP =====
+function loop() {
+  ctx.clearRect(0, 0, W, H);
+
+  update();
+
+  drawBackground();
+  drawAttackTrails();
+  drawParticles();
+  drawEnergyOrbs();
+  drawEnemies();
+  drawPlayer();
+  drawScreenFlash();
+  drawStateOverlay();
+  drawUI();
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
