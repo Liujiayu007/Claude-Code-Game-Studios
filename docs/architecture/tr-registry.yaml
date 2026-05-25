@@ -25,32 +25,874 @@
 # STATUS VALUES: active | deprecated | superseded-by: TR-[system]-NNN
 
 version: 1
-last_updated: ""
+last_updated: "2026-05-25"
 
-requirements: []
+requirements:
+  # =========================================================================
+  # Foundation: Data Config (DC) — 11 requirements
+  # =========================================================================
+  - id: TR-DC-001
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "启动时所有.tres完整有效，所有访问器返回非空值，加载<50ms，无error/warning"
+    category: Foundation
+    status: active
 
-# --- EXAMPLE ENTRIES (remove when first real entries are added) ---
-#
-# - id: TR-combat-001
-#   system: combat
-#   gdd: design/gdd/combat-system.md
-#   requirement: "Player takes damage from enemies based on attack power minus defence"
-#   created: 2026-03-10
-#   revised: ""
-#   status: active
-#
-# - id: TR-combat-002
-#   system: combat
-#   gdd: design/gdd/combat-system.md
-#   requirement: "Combo window timing is 0.4 seconds between hits"
-#   created: 2026-03-10
-#   revised: "2026-04-01"
-#   status: active
-#
-# - id: TR-combat-003
-#   system: combat
-#   gdd: design/gdd/combat-system.md
-#   requirement: "Old damage formula using raw stats"
-#   created: 2026-03-10
-#   revised: ""
-#   status: superseded-by: TR-combat-001
+  - id: TR-DC-002
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "有效key查询返回正确Resource实例，字段值符合预期（hp>0, speed>0, id匹配）"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-003
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "不存在的key查询返回该类别的默认Resource实例并打印warning日志"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-004
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "配置值越界（如hp=-5）时自动clamp到有效范围并打印warning日志标明文件和修正值"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-005
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "编辑器热重载：修改.tres保存后Config查询返回更新值，无需重启场景"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-006
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "导出构建中返回与编辑器相同的配置值，运行时磁盘.tres修改不影响游戏"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-007
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "缺少.tres文件时游戏正常启动不崩溃，查询返回默认实例并打印error日志"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-008
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "两个.tres声明相同id时后加载覆盖前者并打印duplicate key warning"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-009
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "Config在任意其他Autoload的_ready()之前完成加载，查询不返回null或'Config not loaded'"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-010
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "连续60秒每帧查询Config不成为性能瓶颈，帧率保持60fps，单次查询<0.01ms"
+    category: Foundation
+    status: active
+
+  - id: TR-DC-011
+    system: Data Config
+    gdd_file: design/gdd/data-config.md
+    requirement: "Resource引用字段验证：引用存在则通过，不存在则warning+使用默认引用"
+    category: Foundation
+    status: active
+
+  # =========================================================================
+  # Foundation: Game State Manager (GSM) — 12 requirements
+  # =========================================================================
+  - id: TR-GSM-001
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "初始化完成后current_state=EXPLORATION，time_scale=1.0，state_changed信号未被发出"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-002
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "合法状态转换（EXPLORATION→CHARGING）返回true，状态变更，信号携带正确参数发出"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-003
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "非法状态转换（DEATH→TRANSFORMATION）返回false，状态不变，控制台打印error日志"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-004
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "阻塞标志激活时合法转换请求被拒绝，返回false，打印warning标明阻塞来源"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-005
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "CHARGING状态下计量表衰减至0%时自动转换至EXPLORATION并发出state_changed信号"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-006
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "同帧多个状态转换请求按优先级处理，仅执行最高优先级，低优先级被丢弃+warning"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-007
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "UPGRADE状态下time_scale=0.0，任意系统使用delta*time_scale计算的时间增量为0"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-008
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "TRANSFORMATION+has_berserk=true+计量表再次满→自动转换至BERSERK并发出信号"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-009
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "变身持续时间到期→转换至COOLDOWN，state_changed信号发出，time_scale保持1.0"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-010
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "变身期间HP归零→立即转换至DEATH，变身计时器被放弃，信号携带正确参数"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-011
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "reset()方法重置current_state=EXPLORATION并清空blocks字典，不发出state_changed信号"
+    category: Foundation
+    status: active
+
+  - id: TR-GSM-012
+    system: Game State Manager
+    gdd_file: design/gdd/game-state-manager.md
+    requirement: "60秒内经历20+次状态转换后控制台无missed/duplicate/state mismatch类错误"
+    category: Foundation
+    status: active
+
+  # =========================================================================
+  # Foundation: Input System (INP) — 10 requirements
+  # =========================================================================
+  - id: TR-INP-001
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "EXPLORATION状态下按W键，is_action('move_up')返回true，get_move_vector()返回(0,-1)"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-002
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "CHARGING+计量表满时按Space，is_action_just('transform_activate')返回true"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-003
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "EXPLORATION+计量表0%时按Space，is_action('transform_activate')返回false"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-004
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "UPGRADE状态下按W/↑键，ui_up返回true但move_up返回false（移动被过滤）"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-005
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "DEATH状态下按任意键，所有gameplay和UI action返回false"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-006
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "同时按W+D键，get_move_vector()返回归一化斜向移动(0.707,-0.707)"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-007
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "手柄输入后last_input_device变为DEVICE_GAMEPAD并发出device_changed信号"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-008
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "手柄断开后经device_switch_timeout自动回退last_input_device=DEVICE_KEYBOARD"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-009
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "查询不存在于InputMap中的动作名返回false，Godot控制台自动打印error"
+    category: Foundation
+    status: active
+
+  - id: TR-INP-010
+    system: Input System
+    gdd_file: design/gdd/input-system.md
+    requirement: "UPGRADE状态下按Escape，pause返回false（被过滤），ui_cancel返回true（可用）"
+    category: Foundation
+    status: active
+
+  # =========================================================================
+  # Core: Player System (PLY) — 10 requirements
+  # =========================================================================
+  - id: TR-PLY-001
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "EXPLORATION状态下按W键，玩家角色以move_speed(200 px/s)向上移动"
+    category: Core
+    status: active
+
+  - id: TR-PLY-002
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "敌人在攻击范围内且attack_interval到期时，敌人受到attack_damage点伤害"
+    category: Core
+    status: active
+
+  - id: TR-PLY-003
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "多个敌人在攻击范围内时仅最近敌人受到伤害（单目标攻击）"
+    category: Core
+    status: active
+
+  - id: TR-PLY-004
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "HP不足承受伤害时hp_current=0且调用GSM.request_transition(DEATH)"
+    category: Core
+    status: active
+
+  - id: TR-PLY-005
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "受击无敌帧内其他敌人尝试造成伤害时伤害被忽略"
+    category: Core
+    status: active
+
+  - id: TR-PLY-006
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "GSM状态变为TRANSFORMATION时玩家属性切换为FormConfig中的值"
+    category: Core
+    status: active
+
+  - id: TR-PLY-007
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "GSM状态变为COOLDOWN时玩家属性恢复为人类形态默认值"
+    category: Core
+    status: active
+
+  - id: TR-PLY-008
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "同时按W+D键时玩家以归一化速度(~141.4 px/s)沿对角线移动"
+    category: Core
+    status: active
+
+  - id: TR-PLY-009
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "攻击范围内无敌人且attack_interval到期时不触发任何攻击"
+    category: Core
+    status: active
+
+  - id: TR-PLY-010
+    system: Player System
+    gdd_file: design/gdd/player-system.md
+    requirement: "运行60秒帧率不下降，玩家_process中移动+攻击检测<0.5ms/帧"
+    category: Core
+    status: active
+
+  # =========================================================================
+  # Core: Enemy System (ENM) — 6 requirements
+  # =========================================================================
+  - id: TR-ENM-001
+    system: Enemy System
+    gdd_file: design/gdd/enemy-system.md
+    requirement: "敌人生成后在玩家200px范围内时以配置速度向玩家移动"
+    category: Core
+    status: active
+
+  - id: TR-ENM-002
+    system: Enemy System
+    gdd_file: design/gdd/enemy-system.md
+    requirement: "敌人与玩家碰撞+攻击冷却就绪时玩家受到配置伤害，敌人进入攻击冷却"
+    category: Core
+    status: active
+
+  - id: TR-ENM-003
+    system: Enemy System
+    gdd_file: design/gdd/enemy-system.md
+    requirement: "敌人HP归零时发出enemy_killed信号（携带掉落点数），节点被移除"
+    category: Core
+    status: active
+
+  - id: TR-ENM-004
+    system: Enemy System
+    gdd_file: design/gdd/enemy-system.md
+    requirement: "GSM状态为UPGRADE（time_scale=0）时所有敌人停止移动"
+    category: Core
+    status: active
+
+  - id: TR-ENM-005
+    system: Enemy System
+    gdd_file: design/gdd/enemy-system.md
+    requirement: "50个敌人同时活跃时AI更新不导致帧率下降（每帧≤25，分组处理）"
+    category: Core
+    status: active
+
+  - id: TR-ENM-006
+    system: Enemy System
+    gdd_file: design/gdd/enemy-system.md
+    requirement: "生成位置距玩家<100px时偏移至≥100px外"
+    category: Core
+    status: active
+
+  # =========================================================================
+  # Core: Absorption System (ABS) — 6 requirements
+  # =========================================================================
+  - id: TR-ABS-001
+    system: Absorption System
+    gdd_file: design/gdd/absorption-system.md
+    requirement: "敌人死亡时在死亡位置生成对应数量的形态点数掉落物"
+    category: Core
+    status: active
+
+  - id: TR-ABS-002
+    system: Absorption System
+    gdd_file: design/gdd/absorption-system.md
+    requirement: "掉落物在拾取范围内且延迟过后以fly_speed向玩家飞行"
+    category: Core
+    status: active
+
+  - id: TR-ABS-003
+    system: Absorption System
+    gdd_file: design/gdd/absorption-system.md
+    requirement: "掉落物碰到玩家碰撞体时meter_current增加对应点数×状态倍率"
+    category: Core
+    status: active
+
+  - id: TR-ABS-004
+    system: Absorption System
+    gdd_file: design/gdd/absorption-system.md
+    requirement: "CHARGING状态下收集点数应用charging_multiplier倍率（默认2.0x）"
+    category: Core
+    status: active
+
+  - id: TR-ABS-005
+    system: Absorption System
+    gdd_file: design/gdd/absorption-system.md
+    requirement: "meter_current达到1.0时发出meter_full信号"
+    category: Core
+    status: active
+
+  - id: TR-ABS-006
+    system: Absorption System
+    gdd_file: design/gdd/absorption-system.md
+    requirement: "COOLDOWN状态下收集点数仅应用0.1x冷却惩罚倍率"
+    category: Core
+    status: active
+
+  # =========================================================================
+  # Core: Transformation System (TRF) — 12 requirements
+  # =========================================================================
+  - id: TR-TRF-001
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "CHARGING+计量表满+按变身键→TRANSFORMATION，属性替换为FormConfig，计量表归零"
+    category: Core
+    status: active
+
+  - id: TR-TRF-002
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "计量表未满时按变身键无任何状态变更，保持CHARGING和人类属性"
+    category: Core
+    status: active
+
+  - id: TR-TRF-003
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "变身duration归零→COOLDOWN，属性恢复HumanConfig，cooldown_remaining=配置值"
+    category: Core
+    status: active
+
+  - id: TR-TRF-004
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "COOLDOWN+meter_current>0+冷却到期→CHARGING"
+    category: Core
+    status: active
+
+  - id: TR-TRF-005
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "COOLDOWN+meter_current=0+冷却到期→EXPLORATION"
+    category: Core
+    status: active
+
+  - id: TR-TRF-006
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "TRANSFORMATION+计量表满+has_berserk→自动BERSERK，攻击/速度×狂暴倍率，duration暂停"
+    category: Core
+    status: active
+
+  - id: TR-TRF-007
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "TRANSFORMATION+计量表满+has_berserk=false→不触发狂暴，计量表停在100%"
+    category: Core
+    status: active
+
+  - id: TR-TRF-008
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "BERSERK+狂暴duration到期→直接COOLDOWN（不回到普通TRANSFORMATION）"
+    category: Core
+    status: active
+
+  - id: TR-TRF-009
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "Beast圆形AOE命中攻击范围内所有敌人（96px半径内全中）"
+    category: Core
+    status: active
+
+  - id: TR-TRF-010
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "Dragon锥形AOE仅命中前方60°锥形内敌人，锥形外不受伤害"
+    category: Core
+    status: active
+
+  - id: TR-TRF-011
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "COOLDOWN状态下按变身键被GSM状态过滤拦截无效"
+    category: Core
+    status: active
+
+  - id: TR-TRF-012
+    system: Transformation System
+    gdd_file: design/gdd/transformation-system.md
+    requirement: "变身期间HP归零→DEATH，所有变身计时器清理，形态视觉结束，精灵恢复人类"
+    category: Core
+    status: active
+
+  # =========================================================================
+  # Core: Wave System (WAV) — 8 requirements
+  # =========================================================================
+  - id: TR-WAV-001
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "波次清除后current_wave递增并发出wave_started信号"
+    category: Core
+    status: active
+
+  - id: TR-WAV-002
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "按spawn_batch_size分批生成敌人，每批间隔batch_interval秒"
+    category: Core
+    status: active
+
+  - id: TR-WAV-003
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "所有敌人生成完毕且active_enemies=0时判定波次清除并发出wave_cleared信号"
+    category: Core
+    status: active
+
+  - id: TR-WAV-004
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "波次清除后inter_wave_pause秒内无新敌人生成，之后下一波自动开始"
+    category: Core
+    status: active
+
+  - id: TR-WAV-005
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "current_wave=total_waves时不生成普通敌人，发出boss_wave_started信号"
+    category: Core
+    status: active
+
+  - id: TR-WAV-006
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "GSM UPGRADE状态下batch_timer暂停，不生成新敌人"
+    category: Core
+    status: active
+
+  - id: TR-WAV-007
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "波次系统查询area_config.enemy_pool时仅获取unlock_wave≤当前波次的敌人"
+    category: Core
+    status: active
+
+  - id: TR-WAV-008
+    system: Wave System
+    gdd_file: design/gdd/wave-system.md
+    requirement: "最终波Boss清除且next_area_id=null时发出all_waves_cleared信号"
+    category: Core
+    status: active
+
+  # =========================================================================
+  # Core: Area System (ARE) — 8 requirements
+  # =========================================================================
+  - id: TR-ARE-001
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "启动时加载起始区域，current_area_id='windsong_prairie'，area_order=1"
+    category: Core
+    status: active
+
+  - id: TR-ARE-002
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "enemy_pool按unlock_wave过滤，仅返回已解锁波次≤当前波次的敌人类型"
+    category: Core
+    status: active
+
+  - id: TR-ARE-003
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "Boss击败+next_area_id有效→触发区域切换，发出area_changing和area_changed信号"
+    category: Core
+    status: active
+
+  - id: TR-ARE-004
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "next_area_id=null时Boss击败触发all_areas_cleared信号"
+    category: Core
+    status: active
+
+  - id: TR-ARE-005
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "boss_defeated信号的area_id与current_area_id不匹配时忽略信号不触发切换"
+    category: Core
+    status: active
+
+  - id: TR-ARE-006
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "当前区域环境参数（background_key, lighting_color）正确暴露供VFX系统查询"
+    category: Core
+    status: active
+
+  - id: TR-ARE-007
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "next_area_id指向不存在的配置时发出area_load_failed，保持当前区域，不崩溃"
+    category: Core
+    status: active
+
+  - id: TR-ARE-008
+    system: Area System
+    gdd_file: design/gdd/area-system.md
+    requirement: "current_wave=1时仅unlock_wave=1的敌人可用，其他被过滤"
+    category: Core
+    status: active
+
+  # =========================================================================
+  # Presentation: HUD/UI System (HUD) — 12 requirements
+  # =========================================================================
+  - id: TR-HUD-001
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "HP条宽度和数字正确反映hp_current/hp_max比例变化"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-002
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "形态计量表填充宽度随meter_current平滑增长，使用lerp动画过渡"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-003
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "CHARGING+计量表满时变身提示文字出现并播放脉冲动画"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-004
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "GSM→TRANSFORMATION时计量表渐隐+持续时间条渐显+倒计时开始"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-005
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "COOLDOWN状态下冷却条显示灰色填充从0增长至满，数字倒数"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-006
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "波次进度正确显示current_wave/total_waves在屏幕顶部"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-007
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "HP≤30%时屏幕四边红色渐变出现，alpha随HP降低线性增加"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-008
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "HP≤15%时红色警告进入脉冲模式（alpha呼吸，周期0.5s）"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-009
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "GSM→UPGRADE时战斗HUD渐隐+升级界面淡入"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-010
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "GSM→DEATH时战斗HUD隐藏+死亡画面淡入显示"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-011
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "变身提示文字中的按键名从InputMap动态读取，显示当前实际绑定按键"
+    category: Presentation
+    status: active
+
+  - id: TR-HUD-012
+    system: HUD/UI System
+    gdd_file: design/gdd/hud-ui-system.md
+    requirement: "形态图标和计量表填充色随current_form_id切换（Beast橙红/Dragon紫红）"
+    category: Presentation
+    status: active
+
+  # =========================================================================
+  # Presentation: VFX System (VFX) — 12 requirements
+  # =========================================================================
+  - id: TR-VFX-001
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "GSM→TRANSFORMATION时全屏形态色闪光序列触发（色→白→黑→淡出），颜色匹配形态主题色"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-002
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "变身时角色精灵4帧内从底部向上逐行替换为形态精灵（像素撕裂效果）"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-003
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "Beast TRANSFORMATION+damage_dealt→96px半径爆发15个橙色弧形粒子"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-004
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "Dragon TRANSFORMATION+damage_dealt→60°锥形喷射12个紫色三角粒子"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-005
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "player_hit→角色1帧白闪+屏幕四边0.4s红色渐变闪现"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-006
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "HP≤30%屏幕红色渐变持续存在，HP≤15%进入脉冲模式"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-007
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "GSM→DEATH时角色从边缘向内像素崩解(16px/s)+全屏向灰度过渡"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-008
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "boss_wave_started→屏幕边缘红色闪烁+Boss名称显示"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-009
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "TRANSFORMATION→COOLDOWN时形态精灵从顶部向下逐行剥离(3帧)+20个粒子飘散"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-010
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "粒子池耗尽且全为高优先级时新请求不生成，打印warning日志"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-011
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "形态切换（Beast→Dragon）后所有VFX颜色和粒子形状切换为对应形态主题"
+    category: Presentation
+    status: active
+
+  - id: TR-VFX-012
+    system: VFX System
+    gdd_file: design/gdd/vfx-system.md
+    requirement: "活跃粒子总数≤150（性能硬上限），超出时最老粒子被强制回收"
+    category: Presentation
+    status: active
+
+  # =========================================================================
+  # Presentation: Audio System (AUD) — 12 requirements
+  # =========================================================================
+  - id: TR-AUD-001
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "GSM→TRANSFORMATION时变身三层音频同时触发（Sub Boom ~50Hz + Form Sig + Tear）"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-002
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "Beast形态变身时AUD-002使用锯齿波失真合成器音色(100-400Hz sweep)"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-003
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "Dragon形态变身时AUD-002使用共振滤波扫频音色(200→2000Hz)"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-004
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "GSM→COOLDOWN时BGM Layer3+4在1.0s内fade out，低频嗡声停止，反向音效播放"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-005
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "Beast TRANSFORMATION+damage_dealt→~80Hz咚声0.3s，每次攻击音高±5%随机偏差"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-006
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "player_hit→~2kHz短促方波警告音0.05s，与VFX受击白闪同帧"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-007
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "HP≤30%心跳播放：30%时隔0.5s/vol0.3，<15%时隔0.3s/vol0.7"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-008
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "蓄能meter 20%→100%时音高从C2连续升至C4，音量alpha 0→0.3"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-009
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "SFX池8通道全满且全为中优先级时新高优先级音频抢占最老的中优先级通道"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-010
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "SFX池8通道全满且全为最高优先级时新请求静默丢弃并打印warning"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-011
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "BGM crossfade期间触发新状态转换时中断当前crossfade立即开始新的"
+    category: Presentation
+    status: active
+
+  - id: TR-AUD-012
+    system: Audio System
+    gdd_file: design/gdd/audio-system.md
+    requirement: "低HP心跳播放中HP恢复>30%时当前心跳周期完成后停止，不立即中断"
+    category: Presentation
+    status: active
