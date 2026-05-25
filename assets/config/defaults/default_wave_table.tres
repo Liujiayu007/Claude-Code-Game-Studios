@@ -1,0 +1,6 @@
+[gd_resource type="Resource" script="res://src/config/wave_table.gd" load_steps=1 format=3]
+
+[resource]
+table_id = "default"
+area_id = "default"
+entries = []
