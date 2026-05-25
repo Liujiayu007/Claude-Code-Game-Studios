@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script="res://src/config/form_config.gd" load_steps=1 format=3]
+
+[resource]
+form_id = "default"
+form_name = "Default Form"
+hp_multiplier = 1.0
+speed_multiplier = 1.0
+damage_multiplier = 1.0
+duration_seconds = 8.0
+cooldown_seconds = 15.0
+primary_color = Color(0.5, 0.5, 0.5, 1.0)
+unlock_wave = 0
