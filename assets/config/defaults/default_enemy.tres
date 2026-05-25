@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script="res://src/config/enemy_config.gd" load_steps=1 format=3]
+
+[resource]
+enemy_id = "default"
+display_name = "Default Enemy"
+hp = 30
+speed = 80.0
+damage = 10
+form_points_drop = 10
+death_particle_type = "slime_pop"
